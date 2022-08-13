@@ -24,6 +24,8 @@
 module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoidSize=5,weightIntWidth=1,actType="relu",biasFile="",weightFile="")(
     input           clk,
     input           rst,
+	// Input will come sequentially one after another
+	// There is only one input bus
     input [dataWidth-1:0]    myinput,
     input           myinputValid,
     input           weightValid,
@@ -63,6 +65,7 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
     begin
         if(rst)
         begin
+			// initialize everything to 1
             w_addr <= {addressWidth{1'b1}};
             wen <=0;
         end
@@ -78,6 +81,8 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
 
     assign mux_valid = mult_valid;
     assign comboAdd = mul + sum;
+	// when finish all the addition of the multiplication outcome of input and weight matrix
+	// then to the sum of bias and sum
     assign BiasAdd = bias + sum;
     assign ren = myinputValid;
     
@@ -111,14 +116,19 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
     
     always @(posedge clk)
     begin
+		// first input with first weight sequentially
         mul  <= $signed(myinputd) * $signed(w_out);
     end
     
-    
+    // Realize sum = W*x+b
     always @(posedge clk)
     begin
         if(rst|outvalid)
             sum <= 0;
+		// In Neuron, the weight matrix multiplication and bias addition are executed in parallel
+		// Firstly, implement weight martrix multiplication
+		// Secondly, implement bias addition
+		// Bias is assigned to each neurons and weight is assigned to each incoming combination between inputs and neurons
         else if((r_addr == numWeight) & muxValid_f)
         begin
             if(!bias[2*dataWidth-1] &!sum[2*dataWidth-1] & BiasAdd[2*dataWidth-1]) //If bias and sum are positive and after adding bias to sum, if sign bit becomes 1, saturate
@@ -136,11 +146,13 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
         end
         else if(mux_valid)
         begin
+			// It means that an overflow happened. The sum of two positive number results in one negative number.
             if(!mul[2*dataWidth-1] & !sum[2*dataWidth-1] & comboAdd[2*dataWidth-1])
             begin
                 sum[2*dataWidth-1] <= 1'b0;
                 sum[2*dataWidth-2:0] <= {2*dataWidth-1{1'b1}};
             end
+			// It means a underfow happened. The sum of two negative number results in one potive number.
             else if(mul[2*dataWidth-1] & sum[2*dataWidth-1] & !comboAdd[2*dataWidth-1])
             begin
                 sum[2*dataWidth-1] <= 1'b1;
@@ -153,6 +165,7 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
     
     always @(posedge clk)
     begin
+		// give one clock delay for the input
         myinputd <= myinput;
         weight_valid <= myinputValid;
         mult_valid <= weight_valid;
@@ -180,6 +193,8 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
         //Instantiation of ROM for sigmoid
             Sig_ROM #(.inWidth(sigmoidSize),.dataWidth(dataWidth)) s1(
             .clk(clk),
+			// Get the top sigmoidSize from MSB to LSB
+			// drop the lower bits and send the most significant bits  
             .x(sum[2*dataWidth-1-:sigmoidSize]),
             .out(out)
         );
