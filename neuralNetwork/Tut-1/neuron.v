@@ -21,6 +21,9 @@
 //`define DEBUG
 `include "include.v"
 
+// dataWidth defines the width of the data which goes into or out each neuron
+// weightIntWidth defines the width of integer part in data out of 16 bits
+// for a signed data whose integer part is 1bit, that means the data is positive
 module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoidSize=5,weightIntWidth=1,actType="relu",biasFile="",weightFile="")(
     input           clk,
     input           rst,
@@ -47,6 +50,10 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
     reg [dataWidth-1:0]  w_in;
     wire [dataWidth-1:0] w_out;
     reg [2*dataWidth-1:0]  mul; 
+	// sum
+	// 1 bit sign
+	// sizeof(int part of input) + sizeof(int part of weight) + 1 -> integer part
+	// sizeof(frac part of input) + sizeof(frac part of weight) -> frac part
     reg [2*dataWidth-1:0]  sum;
     reg [2*dataWidth-1:0]  bias;
     reg [31:0]    biasReg[0:0];
@@ -117,6 +124,15 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
     always @(posedge clk)
     begin
 		// first input with first weight sequentially
+		// number1   m int  n frac (m+n) bits
+		// number2   k int  j frac (k+j) bits
+		// number1 * number2 result will be the sum of total number of bits (m+n+k+j)bits
+		// 2 bits sign
+		// (m-1) + (k-1) -> integer part
+		// n+j fractional part
+		// for positive, first two bits are "00"
+		// for negative, first two bits are "11"
+		// so, for the sign part of the outcome, we need 
         mul  <= $signed(myinputd) * $signed(w_out);
     end
     
@@ -194,7 +210,10 @@ module neuron #(parameter layerNo=0,neuronNo=0,numWeight=784,dataWidth=16,sigmoi
             Sig_ROM #(.inWidth(sigmoidSize),.dataWidth(dataWidth)) s1(
             .clk(clk),
 			// Get the top sigmoidSize from MSB to LSB
-			// drop the lower bits and send the most significant bits  
+			// drop the lower bits and send the most significant bits
+			// if dataWidth == 16btis
+			// the sizeof sum == 32bits
+			// depth of LUT for sigmoid 2^32*16bits = 8GB for one Neuron which is inapplicable
             .x(sum[2*dataWidth-1-:sigmoidSize]),
             .out(out)
         );

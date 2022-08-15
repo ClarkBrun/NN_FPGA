@@ -37,6 +37,11 @@ module Sig_ROM #(parameter inWidth=10, dataWidth=16) (
     always @(posedge clk)
     begin
         if($signed(x) >= 0)
+			// The operation is done without sign
+			// for positive number, it begins as 0'*****, for unsigned representation, it should be [0, 2^(inWidth-1)]
+			// y <= x+(2^(inWidth-1)) makes its range comes to [2^(inWidth-1), 2^inWidth]
+			// for negative number, it begins as 1'*****, fot unsigned representation, it should be [2^(inWidth-1)+1, 2^inWidth]
+			// y <= x-(2^(inWidth-1)) makes its range comes to [1, 2^(inWidth-1)]
             y <= x+(2**(inWidth-1));
         else 
             y <= x-(2**(inWidth-1));      
